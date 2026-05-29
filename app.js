@@ -92,8 +92,11 @@ const CanvasAPI = (() => {
   }
   async function refreshAssignments() {
     renderQuestsLoading();
-    try { await fetchAllAssignments(); renderQuestsView(allAssignments); }
-    catch (err) { if (err.message !== '401') showCorsError(); }
+    try {
+      await fetchAllAssignments();
+      GameState.syncAllAssignments(allAssignments);
+      renderQuestsView(allAssignments);
+    } catch (err) { if (err.message !== '401') showCorsError(); }
   }
   function getAll() { return allAssignments; }
   return { fetchAllAssignments, refreshAssignments, getAll };
@@ -136,16 +139,93 @@ function getRPGClass(level) {
   return 'Legendary Champion';
 }
 
-// ── Game state (basic, Step 3 will expand) ────────────
+// ── Game state ────────────────────────────────────────
 const GameState = {
-  getCoins: () => parseInt(Store.get('cq_coins') || '500'),
-  getXP:    () => parseInt(Store.get('cq_xp')    || '0'),
-  getLevel: () => {
+  getCoins:    () => parseInt(Store.get('cq_coins') || '500'),
+  getXP:       () => parseInt(Store.get('cq_xp')    || '0'),
+  getLevel() {
     const xp = parseInt(Store.get('cq_xp') || '0');
     return Math.min(50, Math.floor(xp / 500) + 1);
   },
-  getStreak:    () => JSON.parse(Store.get('cq_streak') || '{"current":0,"longest":0}'),
+  getStreak:    () => JSON.parse(Store.get('cq_streak')    || '{"current":0,"longest":0,"lastDate":null}'),
   getCompleted: () => JSON.parse(Store.get('cq_completed') || '[]').length,
+
+  updateStreak(dateString) {
+    const today = new Date().toISOString().slice(0, 10);
+    const subDay = new Date(dateString).toISOString().slice(0, 10);
+    const streak = JSON.parse(Store.get('cq_streak') || '{"current":0,"longest":0,"lastDate":null}');
+    if (streak.lastDate === today) return;
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (streak.lastDate === yesterday || streak.lastDate === subDay) {
+      streak.current += 1;
+    } else {
+      streak.current = 1;
+    }
+    streak.longest  = Math.max(streak.longest, streak.current);
+    streak.lastDate = today;
+    Store.set('cq_streak', JSON.stringify(streak));
+  },
+
+  processAssignment(assignment) {
+    const completed = JSON.parse(Store.get('cq_completed') || '[]');
+    if (completed.includes(assignment.id)) return null;
+    if (assignment.workflow_state !== 'submitted' && assignment.workflow_state !== 'graded') return null;
+    if (!assignment.submitted_at) return null;
+
+    const diff = (new Date(assignment.submitted_at) - new Date(assignment.due_at)) / 86400000;
+    const oldLevel = this.getLevel();
+    let coinsEarned, xpEarned, wasLate = false;
+
+    if (diff <= 0) {
+      coinsEarned = assignment.coin_value;
+      xpEarned    = 50;
+      this.updateStreak(assignment.submitted_at);
+    } else {
+      const deduct = Math.min(25 * Math.ceil(diff), assignment.coin_value * 0.8);
+      coinsEarned  = Math.max(5, assignment.coin_value - deduct);
+      xpEarned     = 15;
+      wasLate      = true;
+      const badges = JSON.parse(Store.get('cq_late_badges') || '[]');
+      badges.push(assignment.id);
+      Store.set('cq_late_badges', JSON.stringify(badges));
+    }
+
+    const newCoins = this.getCoins() + coinsEarned;
+    const newXP    = this.getXP()    + xpEarned;
+    Store.set('cq_coins', String(newCoins));
+    Store.set('cq_xp',    String(newXP));
+
+    completed.push(assignment.id);
+    Store.set('cq_completed', JSON.stringify(completed));
+
+    const history = JSON.parse(Store.get('cq_coin_history') || '[]');
+    history.unshift({ id: assignment.id, name: assignment.name, coinsEarned, wasLate, ts: Date.now() });
+    Store.set('cq_coin_history', JSON.stringify(history.slice(0, 10)));
+
+    const newLevel  = this.getLevel();
+    return { coinsEarned, wasLate, newTotal: newCoins, leveledUp: newLevel > oldLevel };
+  },
+
+  syncAllAssignments(assignments) {
+    let totalEarned = 0;
+    for (const a of assignments) {
+      const result = this.processAssignment(a);
+      if (result) totalEarned += result.coinsEarned;
+    }
+    return totalEarned;
+  },
+
+  getStats() {
+    const level = this.getLevel();
+    return {
+      coins:         this.getCoins(),
+      xp:            this.getXP(),
+      level,
+      streak:        this.getStreak(),
+      completedCount: this.getCompleted(),
+      nextLevelXP:   level * 500,
+    };
+  },
 };
 
 // ── Due date helpers ──────────────────────────────────

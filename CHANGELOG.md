@@ -86,3 +86,26 @@
 **Asset added:** `assets/wizard-hat.png` (677KB, from design bundle)
 
 **Next step:** Step 3 — Coin Economy + Game State
+
+---
+
+## Session 4 — 2026-05-28
+
+### Step 3 Complete: Coin Economy + Game State
+
+**Changes to app.js:**
+- `GameState` expanded from read-only stubs into a full module
+- `updateStreak(dateString)`: tracks daily submission streak — yesterday increments, 2+ day gap resets to 1, updates `longest` field; no-op if already updated today
+- `processAssignment(assignment)`: idempotent (skips ids already in `cq_completed`). On-time (diff ≤ 0 days): full `coin_value` + 50 XP + streak update. Late (diff > 0): deducts `min(25 * ceil(diff), coin_value * 0.8)`, minimum 5 coins, +15 XP, appends to `cq_late_badges`. Saves to `cq_coins`, `cq_xp`, `cq_completed`, `cq_coin_history` (last 10 events). Returns `{ coinsEarned, wasLate, newTotal, leveledUp }`.
+- `syncAllAssignments(assignments)`: runs `processAssignment` on every assignment, returns total earned this sync
+- `getStats()`: returns `{ coins, xp, level, streak, completedCount, nextLevelXP }`
+- `refreshAssignments()`: now calls `GameState.syncAllAssignments(allAssignments)` after fetch, before render — coins auto-award on every app open
+
+**New localStorage keys:**
+- `cq_streak` now includes `lastDate` field (null initially)
+- `cq_late_badges` — JSON array of late assignment IDs
+- `cq_coin_history` — JSON array, last 10 award events `{ id, name, coinsEarned, wasLate, ts }`
+
+**Demo behavior:** On first demo load, assignments demo-7, demo-8, demo-9 (submitted/graded) are processed — player card immediately shows coins > 500 and XP > 0. Subsequent refreshes are idempotent.
+
+**Next step:** Step 4 — Full Quest UI polish + coin burst animation + level-up modal
