@@ -109,3 +109,30 @@
 **Demo behavior:** On first demo load, assignments demo-7, demo-8, demo-9 (submitted/graded) are processed — player card immediately shows coins > 500 and XP > 0. Subsequent refreshes are idempotent.
 
 **Next step:** Step 4 — Full Quest UI polish + coin burst animation + level-up modal
+
+---
+
+## Session 5 — 2026-05-28
+
+### Steps 4 + 5 Complete: Quest UI Polish + Notifications
+
+**Step 4 — Quest UI + Animations (app.js + style.css):**
+- `dueInfo()`: upgraded due text to emoji variants — `⚠ OVERDUE — Xd ago`, `🚨 Due TODAY`, `Due Tomorrow`
+- `questCardHtml()`: added `.q-done-banner` overlay chip (`✓ COMPLETE` green / `⚠ SUBMITTED LATE` orange) positioned top-right of done cards
+- `showCoinBurst(coins)`: creates a fixed `.coin-burst` div that floats up and fades over 1.4s (CSS `@keyframes coin-burst`) — triggered after `syncAllAssignments` returns `totalEarned > 0`
+- `showLevelUpModal(level)`: full-screen overlay with `.level-up-modal` pop animation — shows class title, level number, "Continue Quest" CTA; vibrates device on trigger; triggered 800ms after render when `leveledUp` flag is set
+- CSS: `@keyframes coin-burst`, `@keyframes fade-in`, `@keyframes lum-pop`, `.coin-burst`, `.level-up-overlay`, `.level-up-modal`, `.lum-*`, `.q-done-banner`
+
+**Step 5 — Notifications + Bell Tray (app.js + style.css):**
+- `NotificationManager` IIFE module: `requestPermission()`, `send(title, body)`, `checkDeadlines(assignments)`, `addAlert(msg)`, `toggleTray()`
+- `checkDeadlines()`: for each unsubmitted assignment — 7-day window (6.5–7.5d) → push notification + save to `cq_notified_7d`; 1-day window (0.5–1.5d) → push notification + save to `cq_notified_1d`; count due-this-week → in-app yellow `.alert-banner` if > 0
+- Bell icon: `.bell-dot` red dot badge (shown via JS when `unread > 0`); `onclick="NotificationManager.toggleTray()"` wired on bell button
+- `.bell-tray`: slide-down panel with recent alerts list, "Clear all" button, "No alerts yet" empty state
+- `requestPermission()` called on first setup (demo + form submit) and on returning-user boot
+- `checkDeadlines()` called inside `refreshAssignments()` after every fetch
+- CSS: `.bell-dot`, `.alert-banner`, `.bell-tray`, `.tray-item`, `.tray-empty`, `.tray-clear`, `@keyframes slide-down`
+- `Views.renderQuests()` simplified to call `CanvasAPI.refreshAssignments()` (single entry point for all post-fetch logic)
+
+**Not pushed yet** — will commit Day 3+4 together.
+
+**Next step:** Step 6 — Supabase Leaderboard + assignment detail slide-up sheet

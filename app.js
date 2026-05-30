@@ -94,8 +94,11 @@ const CanvasAPI = (() => {
     renderQuestsLoading();
     try {
       await fetchAllAssignments();
-      GameState.syncAllAssignments(allAssignments);
+      const { totalEarned, leveledUp, newLevel } = GameState.syncAllAssignments(allAssignments);
       renderQuestsView(allAssignments);
+      NotificationManager.checkDeadlines(allAssignments);
+      if (totalEarned > 0) setTimeout(() => showCoinBurst(totalEarned), 400);
+      if (leveledUp)       setTimeout(() => showLevelUpModal(newLevel),  800);
     } catch (err) { if (err.message !== '401') showCorsError(); }
   }
   function getAll() { return allAssignments; }
@@ -208,11 +211,15 @@ const GameState = {
 
   syncAllAssignments(assignments) {
     let totalEarned = 0;
+    let leveledUp   = false;
     for (const a of assignments) {
       const result = this.processAssignment(a);
-      if (result) totalEarned += result.coinsEarned;
+      if (result) {
+        totalEarned += result.coinsEarned;
+        if (result.leveledUp) leveledUp = true;
+      }
     }
-    return totalEarned;
+    return { totalEarned, leveledUp, newLevel: this.getLevel() };
   },
 
   getStats() {
@@ -233,11 +240,11 @@ function dueInfo(dueAt) {
   const diff = (new Date(dueAt).getTime() - Date.now()) / 86400000;
   if (diff < -0.02) {
     const ago = Math.ceil(-diff);
-    return { text: `${ago}d overdue`, cls: 'danger', variant: 'overdue' };
+    return { text: `⚠ OVERDUE — ${ago}d ago`, cls: 'danger', variant: 'overdue' };
   }
-  if (diff <= 1)  return { text: 'due today',     cls: 'warn',   variant: 'today' };
-  if (diff <= 2)  return { text: 'due tomorrow',  cls: 'warn',   variant: 'soon'  };
-  return { text: `in ${Math.ceil(diff)}d`,         cls: '',       variant: 'soon'  };
+  if (diff <= 1)  return { text: '🚨 Due TODAY',   cls: 'warn', variant: 'today' };
+  if (diff <= 2)  return { text: 'Due Tomorrow',   cls: 'warn', variant: 'soon'  };
+  return { text: `in ${Math.ceil(diff)}d`,         cls: '',     variant: 'soon'  };
 }
 
 function isDone(a) { return a.workflow_state === 'submitted' || a.workflow_state === 'graded'; }
@@ -263,6 +270,7 @@ function questCardHtml(a) {
     <div class="quest-card ${variant}${done?' done':''}"
          style="--accent:${accent};--accent-glow:${glow}">
       <div class="strip"></div>
+      ${done ? `<div class="q-done-banner${isLate?' late':''}">${isLate ? '⚠ SUBMITTED LATE' : '✓ COMPLETE'}</div>` : ''}
       <div class="q-body">
         <div class="q-meta">
           <span class="q-course">${escapeHtml(a.course_name)}</span>
@@ -340,9 +348,9 @@ function renderQuestsView(assignments) {
         <button class="icon-pill" aria-label="Refresh" onclick="CanvasAPI.refreshAssignments()">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         </button>
-        <button class="icon-pill" aria-label="Alerts">
+        <button class="icon-pill" id="btn-bell" aria-label="Alerts" onclick="NotificationManager.toggleTray()">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-          ${overdueA.length > 0 ? '<span class="badge-dot"></span>' : ''}
+          <span class="bell-dot" style="display:none"></span>
         </button>
       </div>
     </div>
@@ -416,6 +424,31 @@ function buildQuestListHtml(overdueA, todayA, soonA, done, tab) {
 
 function emptyHtml(msg) {
   return `<div class="q-empty"><div class="q-empty-glyph">⌬</div><div>${msg}</div></div>`;
+}
+
+function showCoinBurst(coins) {
+  const el = document.createElement('div');
+  el.className = 'coin-burst';
+  el.textContent = `+${coins} ⚡`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1400);
+}
+
+function showLevelUpModal(level) {
+  const overlay = document.createElement('div');
+  overlay.className = 'level-up-overlay';
+  overlay.innerHTML = `
+    <div class="level-up-modal">
+      <div class="lum-stars">✦ ✦ ✦</div>
+      <div class="lum-level mono">LEVEL ${level}</div>
+      <div class="lum-title display">LEVEL UP!</div>
+      <div class="lum-class">${escapeHtml(getRPGClass(level))}</div>
+      <button class="btn-primary lum-close">Continue Quest</button>
+    </div>`;
+  overlay.querySelector('.lum-close').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  if (navigator.vibrate) navigator.vibrate([100, 80, 100, 80, 200]);
 }
 
 function setupQuestTabs(overdueA, todayA, soonA, done) {
@@ -511,13 +544,95 @@ function renderProfileView() {
     </div>`;
 }
 
+// ── Notification manager ──────────────────────────────
+const NotificationManager = (() => {
+  const K7D = 'cq_notified_7d';
+  const K1D = 'cq_notified_1d';
+  const alerts = [];
+  let unread = 0;
+
+  async function requestPermission() {
+    if (!('Notification' in window) || Notification.permission !== 'default') return;
+    await Notification.requestPermission();
+  }
+
+  function send(title, body) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    new Notification(title, { body, icon: 'icon-192.png' });
+  }
+
+  function updateBadge() {
+    const dot = document.querySelector('.bell-dot');
+    if (dot) dot.style.display = unread > 0 ? 'block' : 'none';
+  }
+
+  function addAlert(msg) {
+    alerts.unshift({ msg, ts: Date.now() });
+    unread++;
+    updateBadge();
+    const existing = document.getElementById('alert-banner');
+    if (existing) existing.remove();
+    const banner = document.createElement('div');
+    banner.id = 'alert-banner';
+    banner.className = 'alert-banner';
+    banner.innerHTML = `<span>${escapeHtml(msg)}</span><button class="banner-close" aria-label="Dismiss">✕</button>`;
+    banner.querySelector('.banner-close').addEventListener('click', () => banner.remove());
+    const shell = document.getElementById('shell');
+    if (shell) shell.prepend(banner);
+  }
+
+  function checkDeadlines(assignments) {
+    const notified7d = JSON.parse(Store.get(K7D) || '[]');
+    const notified1d = JSON.parse(Store.get(K1D) || '[]');
+    const now = Date.now();
+    let weekCount = 0;
+
+    for (const a of assignments) {
+      if (isDone(a) || !a.due_at) continue;
+      const days = (new Date(a.due_at) - now) / 86400000;
+      if (days > 0 && days <= 7) weekCount++;
+      if (days >= 6.5 && days <= 7.5 && !notified7d.includes(a.id)) {
+        send(`⚔️ Quest expiring: ${a.name}`, `7 days left — ${a.coin_value} coins`);
+        notified7d.push(a.id);
+      }
+      if (days >= 0.5 && days <= 1.5 && !notified1d.includes(a.id)) {
+        send(`🚨 FINAL WARNING: ${a.name}`, `Due TOMORROW — ${a.coin_value} coins at risk!`);
+        notified1d.push(a.id);
+      }
+    }
+
+    Store.set(K7D, JSON.stringify(notified7d));
+    Store.set(K1D, JSON.stringify(notified1d));
+    if (weekCount > 0) addAlert(`⚡ ${weekCount} quest${weekCount > 1 ? 's' : ''} due this week`);
+  }
+
+  function toggleTray() {
+    const existing = document.getElementById('bell-tray');
+    if (existing) { existing.remove(); return; }
+    unread = 0;
+    updateBadge();
+    const tray = document.createElement('div');
+    tray.id = 'bell-tray';
+    tray.className = 'bell-tray';
+    if (alerts.length === 0) {
+      tray.innerHTML = `<div class="tray-empty">No alerts yet</div>`;
+    } else {
+      tray.innerHTML = alerts.map(a => `<div class="tray-item">${escapeHtml(a.msg)}</div>`).join('')
+        + `<button class="tray-clear">Clear all</button>`;
+      tray.querySelector('.tray-clear').addEventListener('click', () => {
+        alerts.length = 0; unread = 0; updateBadge(); tray.remove();
+      });
+    }
+    document.getElementById('shell').prepend(tray);
+  }
+
+  return { requestPermission, checkDeadlines, toggleTray };
+})();
+
 // ── View renderers ────────────────────────────────────
 const Views = {
   renderQuests() {
-    renderQuestsLoading();
-    CanvasAPI.fetchAllAssignments()
-      .then(a => renderQuestsView(a))
-      .catch(err => { if (err.message !== '401') showCorsError(); });
+    CanvasAPI.refreshAssignments();
     return '';
   },
   renderLeaderboard() {
@@ -597,7 +712,7 @@ const SetupModal = (() => {
       Store.set('cq_token',    DEMO_TOKEN);
       Store.set('cq_username', DEMO_USER);
       Store.set('cq_setup',    'true');
-      hide(); showShell(); Router.navigate('#quests');
+      hide(); showShell(); NotificationManager.requestPermission(); Router.navigate('#quests');
     });
 
     // Form submit
@@ -614,7 +729,7 @@ const SetupModal = (() => {
       Store.set('cq_token',    token);
       Store.set('cq_username', username);
       Store.set('cq_setup',    'true');
-      hide(); showShell(); Router.navigate(location.hash || '#quests');
+      hide(); showShell(); NotificationManager.requestPermission(); Router.navigate(location.hash || '#quests');
     });
   }
 
@@ -631,6 +746,7 @@ function boot() {
     SetupModal.show();
   } else {
     showShell();
+    NotificationManager.requestPermission();
     Router.navigate(location.hash || '#quests');
   }
 }
