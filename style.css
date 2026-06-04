@@ -720,6 +720,139 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* =====================================================
+   STEP 6 — LEADERBOARD
+   ===================================================== */
+
+.lb-screen { padding: 0 0 calc(var(--nav-height) + 16px); }
+
+.lb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 18px 12px;
+  position: sticky; top: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+
+.lb-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.lb-list { padding: 0 14px; }
+
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  transition: background 0.15s;
+}
+
+.lb-row.me {
+  background: linear-gradient(135deg, rgba(244,197,66,0.08), rgba(184,255,58,0.06));
+  border-color: rgba(244,197,66,0.3);
+  box-shadow: 0 0 20px rgba(244,197,66,0.08);
+}
+
+.lb-row.top1 { border-color: rgba(255,215,0,0.4); }
+.lb-row.top2 { border-color: rgba(192,192,192,0.3); }
+.lb-row.top3 { border-color: rgba(205,127,50,0.3); }
+
+.lb-pos { width: 32px; text-align: center; flex-shrink: 0; }
+.lb-medal { font-size: 1.4rem; }
+.lb-rank {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.lb-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lb-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lb-you {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--green);
+  background: rgba(184,255,58,0.12);
+  border: 1px solid rgba(184,255,58,0.25);
+  border-radius: 999px;
+  padding: 1px 6px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.lb-level {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+}
+
+.lb-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.lb-coins {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.lb-streak {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.lb-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.lb-updated {
+  text-align: center;
+  padding: 12px 16px 4px;
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.lb-loading { padding: 8px 0; }
+
+/* =====================================================
    STEP 4 — COIN BURST + LEVEL-UP MODAL
    ===================================================== */
 

@@ -136,3 +136,27 @@
 **Not pushed yet** — will commit Day 3+4 together.
 
 **Next step:** Step 6 — Supabase Leaderboard + assignment detail slide-up sheet
+
+---
+
+## Session 6 — 2026-06-03
+
+### Step 6 Complete: Supabase Leaderboard
+
+**index.html:** Supabase CDN script tag added before app.js.
+
+**app.js — `Leaderboard` IIFE module:**
+- `SUPABASE_URL` / `SUPABASE_KEY` constants at top of file (fill in before deploying)
+- `client()`: lazy-initialises `window.supabase.createClient` only when credentials are set
+- `sync()`: debounced 5s upsert of all `GameState.getStats()` fields into `leaderboard` table, keyed on `username`; skips demo mode; silent on error (non-critical)
+- `fetchRows()`: `SELECT * FROM leaderboard WHERE canvas_domain = {domain} ORDER BY coins DESC LIMIT 50`; demo mode returns `MOCK_LEADERBOARD` (5 mock wizards)
+- `renderView()`: async — injects skeleton loading immediately, then replaces with rendered rows; sticky header + refresh button; last-updated timestamp
+- `renderRows()`: 🥇🥈🥉 medals for top 3, `.me` gold-tint row for current user, `.lb-you` chip, streak + coins per row; "Be the first wizard on this leaderboard!" empty state
+- `MOCK_LEADERBOARD`: 5 demo entries so leaderboard is testable without Supabase credentials
+- `Leaderboard.sync()` called inside `refreshAssignments()` after every coin sync
+
+**style.css:** `.lb-screen`, `.lb-header`, `.lb-row`, `.lb-row.me`, `.lb-row.top1/2/3`, `.lb-pos`, `.lb-medal`, `.lb-name`, `.lb-you`, `.lb-coins`, `.lb-streak`, `.lb-empty`, `.lb-updated`, `.lb-loading`
+
+**SQL to run in Supabase editor** (see build guide Step 6 for full schema + RLS policies).
+
+**Next step:** Step 7 — Guild System + Step 8 Full Profile View

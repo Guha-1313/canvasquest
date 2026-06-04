@@ -19,6 +19,10 @@ const DEMO_USER   = 'Demo Wizard';
 
 function isDemoMode() { return Store.get('cq_token') === DEMO_TOKEN; }
 
+// ── Supabase config (fill in your project URL + anon key) ─
+const SUPABASE_URL = '';
+const SUPABASE_KEY = '';
+
 function makeDue(d) {
   const dt = new Date(); dt.setDate(dt.getDate() + d); return dt.toISOString();
 }
@@ -97,6 +101,7 @@ const CanvasAPI = (() => {
       const { totalEarned, leveledUp, newLevel } = GameState.syncAllAssignments(allAssignments);
       renderQuestsView(allAssignments);
       NotificationManager.checkDeadlines(allAssignments);
+      Leaderboard.sync();
       if (totalEarned > 0) setTimeout(() => showCoinBurst(totalEarned), 400);
       if (leveledUp)       setTimeout(() => showLevelUpModal(newLevel),  800);
     } catch (err) { if (err.message !== '401') showCorsError(); }
@@ -629,6 +634,116 @@ const NotificationManager = (() => {
   return { requestPermission, checkDeadlines, toggleTray };
 })();
 
+// ── Leaderboard (Supabase) ────────────────────────────
+const Leaderboard = (() => {
+  let _client = null;
+  let _syncTimer = null;
+  let _lastUpdated = null;
+
+  function client() {
+    if (!_client && SUPABASE_URL && SUPABASE_KEY && window.supabase) {
+      _client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+    return _client;
+  }
+
+  function sync() {
+    if (isDemoMode() || !client()) return;
+    clearTimeout(_syncTimer);
+    _syncTimer = setTimeout(async () => {
+      const stats = GameState.getStats();
+      const domain = Store.get('cq_domain') || '';
+      const username = Store.get('cq_username') || 'Wizard';
+      try {
+        await client().from('leaderboard').upsert({
+          username,
+          canvas_domain: domain,
+          coins: stats.coins,
+          level: stats.level,
+          xp: stats.xp,
+          streak: stats.streak.current,
+          assignments_completed: stats.completedCount,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'username' });
+      } catch (_) { /* silent — leaderboard is non-critical */ }
+    }, 5000);
+  }
+
+  async function fetchRows() {
+    const domain = Store.get('cq_domain') || '';
+    if (isDemoMode()) return MOCK_LEADERBOARD;
+    if (!client()) return [];
+    try {
+      const { data } = await client()
+        .from('leaderboard')
+        .select('*')
+        .eq('canvas_domain', domain)
+        .order('coins', { ascending: false })
+        .limit(50);
+      _lastUpdated = new Date();
+      return data || [];
+    } catch (_) { return []; }
+  }
+
+  function renderRows(rows) {
+    const myName = Store.get('cq_username') || '';
+    const medals = ['🥇', '🥈', '🥉'];
+    if (!rows.length) {
+      return `<div class="lb-empty">Be the first wizard on this leaderboard!</div>`;
+    }
+    return rows.map((row, i) => {
+      const isMe = row.username === myName;
+      const medal = i < 3 ? `<span class="lb-medal">${medals[i]}</span>` : `<span class="lb-rank">${i + 1}</span>`;
+      return `
+        <div class="lb-row${isMe ? ' me' : ''}${i < 3 ? ' top' + (i+1) : ''}">
+          <div class="lb-pos">${medal}</div>
+          <div class="lb-info">
+            <span class="lb-name">${escapeHtml(row.username)}${isMe ? ' <span class="lb-you">you</span>' : ''}</span>
+            <span class="lb-level mono">LVL ${row.level}</span>
+          </div>
+          <div class="lb-stats">
+            <span class="lb-coins">★ ${formatCoins(row.coins)}</span>
+            <span class="lb-streak">${row.streak}🔥</span>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  async function renderView() {
+    const app = document.getElementById('app');
+    app.innerHTML = `
+      <div class="lb-screen">
+        <div class="lb-header">
+          <span class="lb-title display">Realms</span>
+          <button class="icon-pill" aria-label="Refresh" onclick="Leaderboard.renderView()">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          </button>
+        </div>
+        <div id="lb-list" class="lb-list">
+          <div class="lb-loading">${[1,2,3,4,5].map(() => '<div class="skeleton" style="height:56px;margin-bottom:8px;border-radius:12px"></div>').join('')}</div>
+        </div>
+        <div class="lb-updated mono" id="lb-updated"></div>
+      </div>`;
+
+    const rows = await fetchRows();
+    document.getElementById('lb-list').innerHTML = renderRows(rows);
+    if (_lastUpdated) {
+      document.getElementById('lb-updated').textContent =
+        `Updated ${_lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+  }
+
+  const MOCK_LEADERBOARD = [
+    { username: 'Demo Wizard',   canvas_domain: DEMO_DOMAIN, coins: 2840, level: 6, xp: 2840, streak: 5, assignments_completed: 18 },
+    { username: 'ArcaneMage99', canvas_domain: DEMO_DOMAIN, coins: 2310, level: 5, xp: 2310, streak: 3, assignments_completed: 14 },
+    { username: 'QuestKnight',  canvas_domain: DEMO_DOMAIN, coins: 1950, level: 4, xp: 1950, streak: 7, assignments_completed: 12 },
+    { username: 'ShadowArcher', canvas_domain: DEMO_DOMAIN, coins: 1600, level: 3, xp: 1600, streak: 1, assignments_completed: 9  },
+    { username: 'ApprenticeX',  canvas_domain: DEMO_DOMAIN, coins: 820,  level: 2, xp: 820,  streak: 2, assignments_completed: 5  },
+  ];
+
+  return { sync, renderView };
+})();
+
 // ── View renderers ────────────────────────────────────
 const Views = {
   renderQuests() {
@@ -636,7 +751,8 @@ const Views = {
     return '';
   },
   renderLeaderboard() {
-    return `<div class="view-placeholder"><div class="placeholder-icon">🗺️</div><h2>Realms</h2><p>Leaderboard coming in Step 6.</p></div>`;
+    Leaderboard.renderView();
+    return '';
   },
   renderGuild() {
     return `<div class="view-placeholder"><div class="placeholder-icon">✦</div><h2>Guild</h2><p>Guild system coming in Step 7.</p></div>`;
