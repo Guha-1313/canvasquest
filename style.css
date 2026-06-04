@@ -853,6 +853,261 @@ a { color: inherit; text-decoration: none; }
 .lb-loading { padding: 8px 0; }
 
 /* =====================================================
+   STEP 7 — GUILD SYSTEM
+   ===================================================== */
+
+.guild-screen { padding: 0 0 calc(var(--nav-height) + 16px); }
+
+.guild-list { padding: 0 14px; }
+
+.guild-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.guild-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.guild-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.03em;
+}
+
+.guild-glyph {
+  font-size: 1.1rem;
+  color: var(--gold);
+  opacity: 0.7;
+}
+
+.guild-boss-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.guild-boss-label {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+}
+
+.guild-boss-coins {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  color: var(--gold);
+}
+
+.guild-boss-name {
+  font-size: 0.88rem;
+  color: var(--text);
+  font-weight: 500;
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+
+.guild-health-track {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.guild-health-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.guild-boss-status {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.guild-boss-status.won  { color: var(--green); }
+.guild-boss-status.lost { color: var(--danger); }
+.guild-boss-status.active { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
+
+.guild-no-boss {
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+/* =====================================================
+   STEP 8 — PROFILE VIEW
+   ===================================================== */
+
+.profile-class-badge {
+  font-size: 2.8rem;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 0 16px rgba(184,255,58,0.3));
+}
+
+.profile-name-wrap { margin-bottom: 4px; }
+
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 0 18px 24px;
+}
+
+.pstat {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pstat.gold  { border-color: rgba(244,197,66,0.25); background: rgba(244,197,66,0.06); }
+.pstat.green { border-color: rgba(184,255,58,0.2);  background: rgba(184,255,58,0.05); }
+
+.pstat .pv {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.pstat .pl {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+}
+
+/* Coin history */
+.hist-list { padding: 0 18px 8px; }
+
+.hist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+.hist-row:last-child { border-bottom: none; }
+
+.hist-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hist-name {
+  font-size: 0.82rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hist-date {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+}
+
+.hist-coins {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--green);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.hist-coins.late { color: var(--orange); }
+
+/* Settings list */
+.settings-list { padding: 0 18px 32px; display: flex; flex-direction: column; gap: 0; }
+
+.setting-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setting-row:last-of-type { border-bottom: none; }
+
+.setting-label {
+  display: block;
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+
+.setting-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.setting-val {
+  flex: 1;
+  font-size: 0.88rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setting-input {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+}
+.setting-input:focus { border-color: var(--green); }
+
+.setting-edit-btn {
+  background: none;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.06em;
+  padding: 5px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.setting-edit-btn:hover { color: var(--green); border-color: var(--green); }
+
+.btn-danger-outline {
+  background: none;
+  border: 1px solid rgba(255,92,92,0.35);
+  border-radius: 999px;
+  color: var(--danger);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  padding: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-danger-outline:hover { background: rgba(255,92,92,0.08); }
+
+/* =====================================================
    STEP 4 — COIN BURST + LEVEL-UP MODAL
    ===================================================== */
 

@@ -160,3 +160,24 @@
 **SQL to run in Supabase editor** (see build guide Step 6 for full schema + RLS policies).
 
 **Next step:** Step 7 — Guild System + Step 8 Full Profile View
+
+---
+
+## Session 7 — 2026-06-03
+
+### Steps 7 + 8 Complete: Guild System + Full Profile View
+
+**Step 7 — Guild System (app.js + style.css):**
+- `Guild` IIFE module: `groupByCourse()`, `getBoss()` (highest points_possible within 7-day window), `bossStatus()` (defeated/escaped/active), `claimBossBonus()` (idempotent +100 coins via `cq_claimed_guild_bonuses`)
+- `renderView()`: groups all loaded assignments by `course_name`, renders one guild card per course; shows skeleton + auto-fetches if assignments not yet loaded
+- Guild card: course name, ⚔ glyph, weekly boss name + coin value, health bar (CSS width = days_left/7 × 100%), status label (green "Boss Defeated! ✓ +100 ⚡" / red "Boss escaped..." / muted "Xd remaining")
+- `Views.renderGuild()` wired to `Guild.renderView()`
+- CSS: `.guild-card`, `.guild-header`, `.guild-boss`, `.guild-health-track`, `.guild-health-fill`, `.guild-boss-status.won/lost/active`
+
+**Step 8 — Full Profile View (app.js + style.css):**
+- `getRPGEmoji(level)`: returns 🧙/⚔️/🏹/🔮/👑 per level range
+- `renderProfileView()` full rewrite: RPG emoji badge, editable display name, 2×3 stats grid (Coins/Level/XP/Streak/Completed/Best Streak), coin history list from `cq_coin_history`, editable settings (domain + token inline edit), Refresh + Reset buttons
+- `setupProfileEdit()`: wires Edit/Save toggle on display name, domain, token fields; Enter key saves; username save triggers `Leaderboard.sync()`
+- CSS: `.profile-class-badge`, `.profile-stats-grid`, `.pstat`, `.hist-list`, `.hist-row`, `.hist-coins.late`, `.settings-list`, `.setting-row`, `.setting-edit-btn`, `.btn-danger-outline`
+
+**Next step:** Step 9 — Deploy (Vercel + Cloudflare CORS worker + README)

@@ -146,6 +146,13 @@ function getRPGClass(level) {
   if (level <= 45) return 'Arcane Mage';
   return 'Legendary Champion';
 }
+function getRPGEmoji(level) {
+  if (level <= 5)  return '🧙';
+  if (level <= 15) return '⚔️';
+  if (level <= 30) return '🏹';
+  if (level <= 45) return '🔮';
+  return '👑';
+}
 
 // ── Game state ────────────────────────────────────────
 const GameState = {
@@ -489,64 +496,142 @@ function setupPullToRefresh() {
 
 // ── Profile view ──────────────────────────────────────
 function renderProfileView() {
-  const username = Store.get('cq_username') || 'Wizard';
-  const level    = GameState.getLevel();
-  const coins    = GameState.getCoins();
-  const xp       = GameState.getXP();
-  const streak   = GameState.getStreak();
-  const completed= GameState.getCompleted();
-  const initial  = getInitial(username);
-  const rpgClass = getRPGClass(level).toUpperCase();
+  const username  = Store.get('cq_username') || 'Wizard';
+  const level     = GameState.getLevel();
+  const stats     = GameState.getStats();
+  const streak    = stats.streak;
+  const history   = JSON.parse(Store.get('cq_coin_history') || '[]');
+  const rpgClass  = getRPGClass(level);
+  const rpgEmoji  = getRPGEmoji(level);
+
+  const historyHtml = history.length
+    ? history.map(h => {
+        const when = new Date(h.ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return `
+          <div class="hist-row">
+            <div class="hist-info">
+              <span class="hist-name">${escapeHtml(h.name)}</span>
+              <span class="hist-date mono">${when}</span>
+            </div>
+            <span class="hist-coins${h.wasLate ? ' late' : ''}">+${h.coinsEarned} ⚡${h.wasLate ? ' late' : ''}</span>
+          </div>`;
+      }).join('')
+    : `<div class="lb-empty" style="padding:20px 0">No coin history yet</div>`;
 
   document.getElementById('app').innerHTML = `
     <div class="profile-screen">
       <div class="profile-top">
         <span class="profile-top-label mono">Hero · Profile</span>
-        <button class="icon-pill" aria-label="Settings">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
       </div>
       <div class="profile-content">
+
         <div class="profile-hero">
-          <div class="profile-avatar"><span>${initial}</span></div>
-          <div class="profile-name display">${escapeHtml(username)}</div>
-          <div class="profile-class mono">${escapeHtml(rpgClass)} · LEVEL ${level}</div>
+          <div class="profile-class-badge">${rpgEmoji}</div>
+          <div class="profile-name-wrap">
+            <div class="profile-name display" id="profile-name-display">${escapeHtml(username)}</div>
+            <input class="profile-name-input" id="profile-name-input" value="${escapeHtml(username)}" maxlength="30" hidden />
+          </div>
+          <div class="profile-class mono">${escapeHtml(rpgClass.toUpperCase())} · LEVEL ${level}</div>
         </div>
 
-        <div class="profile-stats">
-          <div class="stat-tile gold">
-            <span class="v display">${formatCoins(coins)}</span>
-            <span class="l mono">Coins</span>
-          </div>
-          <div class="stat-tile green">
-            <span class="v display">${formatCoins(xp)}</span>
-            <span class="l mono">Total XP</span>
-          </div>
-          <div class="stat-tile">
-            <span class="v display">${streak.current}d</span>
-            <span class="l mono">Streak</span>
-          </div>
+        <div class="profile-stats-grid">
+          <div class="pstat gold"><span class="pv">${formatCoins(stats.coins)}</span><span class="pl mono">Coins</span></div>
+          <div class="pstat"><span class="pv">${level}</span><span class="pl mono">Level</span></div>
+          <div class="pstat green"><span class="pv">${formatCoins(stats.xp)}</span><span class="pl mono">XP</span></div>
+          <div class="pstat"><span class="pv">${streak.current}d</span><span class="pl mono">Streak</span></div>
+          <div class="pstat"><span class="pv">${stats.completedCount}</span><span class="pl mono">Completed</span></div>
+          <div class="pstat"><span class="pv">${streak.longest}d</span><span class="pl mono">Best Streak</span></div>
         </div>
+
+        <div class="profile-section-h mono">Coin History</div>
+        <div class="hist-list">${historyHtml}</div>
 
         <div class="profile-section-h mono">Settings</div>
-        <div class="course-list">
-          <div class="course-row" style="flex-direction:column;align-items:flex-start;gap:12px">
-            <div style="width:100%">
-              <div class="course-code mono" style="margin-bottom:6px">CANVAS DOMAIN</div>
-              <div style="font-size:13px;color:var(--text)">${escapeHtml(Store.get('cq_domain') || '—')}</div>
+        <div class="settings-list">
+          <div class="setting-row">
+            <label class="setting-label mono">DISPLAY NAME</label>
+            <div class="setting-edit-row">
+              <span class="setting-val" id="sname-val">${escapeHtml(username)}</span>
+              <input class="setting-input" id="sname-input" value="${escapeHtml(username)}" maxlength="30" hidden />
+              <button class="setting-edit-btn" id="sname-btn">Edit</button>
             </div>
-            <button class="btn-primary" style="width:100%;padding:12px 16px;font-size:13px"
-                    onclick="CanvasAPI.refreshAssignments();Router.navigate('#quests')">
-              Refresh Assignments
-            </button>
-            <button onclick="if(confirm('Reset all data? This cannot be undone.')){localStorage.clear();location.reload();}"
-                    style="width:100%;padding:12px;border-radius:999px;border:1px solid rgba(255,92,92,0.35);color:var(--danger);font-size:13px;letter-spacing:0.04em;font-weight:500">
-              Reset All Data
-            </button>
           </div>
+          <div class="setting-row">
+            <label class="setting-label mono">CANVAS DOMAIN</label>
+            <div class="setting-edit-row">
+              <span class="setting-val" id="sdomain-val">${escapeHtml(Store.get('cq_domain') || '—')}</span>
+              <input class="setting-input" id="sdomain-input" value="${escapeHtml(Store.get('cq_domain') || '')}" hidden />
+              <button class="setting-edit-btn" id="sdomain-btn">Edit</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label class="setting-label mono">CANVAS TOKEN</label>
+            <div class="setting-edit-row">
+              <span class="setting-val">••••••••</span>
+              <input class="setting-input" id="stoken-input" type="password" value="${escapeHtml(Store.get('cq_token') || '')}" hidden />
+              <button class="setting-edit-btn" id="stoken-btn">Edit</button>
+            </div>
+          </div>
+          <button class="btn-primary" style="width:100%;margin-top:8px"
+                  onclick="CanvasAPI.refreshAssignments();Router.navigate('#quests')">
+            Refresh Assignments
+          </button>
+          <button class="btn-danger-outline" style="width:100%;margin-top:8px"
+                  onclick="if(confirm('Reset all data? This cannot be undone.')){localStorage.clear();location.reload();}">
+            Reset All Data
+          </button>
         </div>
+
       </div>
     </div>`;
+
+  setupProfileEdit();
+}
+
+function setupProfileEdit() {
+  function makeEditable(valId, inputId, btnId, storageKey, syncFn) {
+    const val = document.getElementById(valId);
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    if (!val || !input || !btn) return;
+
+    btn.addEventListener('click', () => {
+      const editing = !input.hidden;
+      if (editing) {
+        const v = input.value.trim();
+        if (v) { Store.set(storageKey, v); val.textContent = v; if (syncFn) syncFn(v); }
+        input.hidden = true; val.hidden = false; btn.textContent = 'Edit';
+      } else {
+        val.hidden = true; input.hidden = false; input.focus(); btn.textContent = 'Save';
+      }
+    });
+
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+  }
+
+  makeEditable('sname-val', 'sname-input', 'sname-btn', 'cq_username', v => {
+    Store.set('cq_username', v);
+    Leaderboard.sync();
+  });
+  makeEditable('sdomain-val', 'sdomain-input', 'sdomain-btn', 'cq_domain', null);
+  makeEditable(null, 'stoken-input', 'stoken-btn', 'cq_token', null);
+
+  // Token edit special case — no val span
+  const tokenBtn = document.getElementById('stoken-btn');
+  const tokenInput = document.getElementById('stoken-input');
+  if (tokenBtn && tokenInput) {
+    tokenBtn.addEventListener('click', () => {
+      const editing = !tokenInput.hidden;
+      if (editing) {
+        const v = tokenInput.value.trim();
+        if (v) Store.set('cq_token', v);
+        tokenInput.hidden = true; tokenBtn.textContent = 'Edit';
+      } else {
+        tokenInput.hidden = false; tokenInput.focus(); tokenBtn.textContent = 'Save';
+      }
+    });
+    tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') tokenBtn.click(); });
+  }
 }
 
 // ── Notification manager ──────────────────────────────
@@ -632,6 +717,110 @@ const NotificationManager = (() => {
   }
 
   return { requestPermission, checkDeadlines, toggleTray };
+})();
+
+// ── Guild system ─────────────────────────────────────
+const Guild = (() => {
+  function groupByCourse(assignments) {
+    const map = {};
+    for (const a of assignments) {
+      if (!map[a.course_name]) map[a.course_name] = [];
+      map[a.course_name].push(a);
+    }
+    return map;
+  }
+
+  function getBoss(assignments) {
+    const now = Date.now();
+    const inWindow = assignments.filter(a => {
+      if (!a.due_at) return false;
+      const days = (new Date(a.due_at) - now) / 86400000;
+      return days >= -0.5 && days <= 7;
+    });
+    if (!inWindow.length) return null;
+    return inWindow.reduce((max, a) => a.points_possible > max.points_possible ? a : max);
+  }
+
+  function bossStatus(boss) {
+    if (!boss) return { status: 'none' };
+    const days = (new Date(boss.due_at) - Date.now()) / 86400000;
+    if (isDone(boss))  return { status: 'defeated', healthPct: 100 };
+    if (days < -0.5)   return { status: 'escaped',  healthPct: 0 };
+    return { status: 'active', healthPct: Math.round(Math.min(100, (days / 7) * 100)), daysLeft: Math.ceil(days) };
+  }
+
+  function claimBossBonus(boss) {
+    const claimed = JSON.parse(Store.get('cq_claimed_guild_bonuses') || '[]');
+    if (claimed.includes(boss.id)) return false;
+    Store.set('cq_coins', String(GameState.getCoins() + 100));
+    claimed.push(boss.id);
+    Store.set('cq_claimed_guild_bonuses', JSON.stringify(claimed));
+    return true;
+  }
+
+  function guildCardHtml(courseName, assignments) {
+    const boss = getBoss(assignments);
+    const bst  = bossStatus(boss);
+    let bonusAwarded = false;
+    if (bst.status === 'defeated') bonusAwarded = claimBossBonus(boss);
+
+    const healthColor = bst.status === 'defeated' ? 'var(--green)'
+                      : bst.status === 'escaped'  ? 'var(--danger)'
+                      : 'var(--gold)';
+
+    const bossHtml = !boss
+      ? `<div class="guild-no-boss mono">No active boss this week</div>`
+      : `<div class="guild-boss">
+           <div class="guild-boss-meta">
+             <span class="guild-boss-label mono">WEEKLY BOSS</span>
+             <span class="guild-boss-coins">★ ${boss.coin_value}</span>
+           </div>
+           <div class="guild-boss-name">${escapeHtml(boss.name)}</div>
+           <div class="guild-health-track">
+             <div class="guild-health-fill" style="width:${bst.healthPct}%;background:${healthColor}"></div>
+           </div>
+           ${bst.status === 'defeated' ? `<div class="guild-boss-status won">Boss Defeated! ✓${bonusAwarded ? ' +100 ⚡' : ''}</div>` : ''}
+           ${bst.status === 'escaped'  ? `<div class="guild-boss-status lost">Boss escaped... -50 coins</div>` : ''}
+           ${bst.status === 'active'   ? `<div class="guild-boss-status active mono">${bst.daysLeft}d remaining</div>` : ''}
+         </div>`;
+
+    return `
+      <div class="guild-card">
+        <div class="guild-header">
+          <div class="guild-name">${escapeHtml(courseName)}</div>
+          <span class="guild-glyph">⚔</span>
+        </div>
+        ${bossHtml}
+      </div>`;
+  }
+
+  function renderView() {
+    const app = document.getElementById('app');
+    const assignments = CanvasAPI.getAll();
+
+    if (!assignments.length) {
+      app.innerHTML = `<div class="lb-screen"><div class="lb-header"><span class="lb-title display">Guilds</span></div><div style="padding:14px">${[1,2,3].map(() => '<div class="skeleton" style="height:130px;margin-bottom:12px;border-radius:14px"></div>').join('')}</div></div>`;
+      CanvasAPI.fetchAllAssignments().then(() => renderView());
+      return;
+    }
+
+    const grouped = groupByCourse(assignments);
+    const courses  = Object.keys(grouped).sort();
+
+    app.innerHTML = `
+      <div class="guild-screen">
+        <div class="lb-header">
+          <span class="lb-title display">Guilds</span>
+        </div>
+        <div class="guild-list">
+          ${courses.length
+            ? courses.map(c => guildCardHtml(c, grouped[c])).join('')
+            : '<div class="lb-empty">No guilds found. Load your quests first.</div>'}
+        </div>
+      </div>`;
+  }
+
+  return { renderView };
 })();
 
 // ── Leaderboard (Supabase) ────────────────────────────
@@ -755,7 +944,7 @@ const Views = {
     return '';
   },
   renderGuild() {
-    return `<div class="view-placeholder"><div class="placeholder-icon">✦</div><h2>Guild</h2><p>Guild system coming in Step 7.</p></div>`;
+    Guild.renderView(); return '';
   },
   renderProfile() {
     renderProfileView(); return '';
