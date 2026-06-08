@@ -181,3 +181,17 @@
 - CSS: `.profile-class-badge`, `.profile-stats-grid`, `.pstat`, `.hist-list`, `.hist-row`, `.hist-coins.late`, `.settings-list`, `.setting-row`, `.setting-edit-btn`, `.btn-danger-outline`
 
 **Next step:** Step 9 — Deploy (Vercel + Cloudflare CORS worker + README)
+
+---
+
+## Session 8 — 2026-06-04
+
+### Step 9 Complete: Deploy + Go Live — Initial Release
+
+**Files created:**
+- `worker.js` — Cloudflare Worker CORS proxy. Extracts `?domain=` query param, validates it matches `*.instructure.com`, forwards request with all original headers (including Authorization), injects `Access-Control-Allow-Origin: *` on response, handles OPTIONS preflight. Deploy by pasting into Cloudflare Workers editor.
+- `README.md` — Full documentation: Quick Start, Canvas token guide (Account → Settings → Approved Integrations), Supabase setup (full SQL schema for both tables + where to find keys), Cloudflare Worker deploy steps + apiFetch update snippet, Add to Home Screen (iPhone Safari + Android Chrome), Phase 2 OAuth placeholder, tech stack table.
+
+**vercel.json** — already correct from Session 1; no changes needed.
+
+**All 9 steps complete. Ready to deploy to Vercel.**
