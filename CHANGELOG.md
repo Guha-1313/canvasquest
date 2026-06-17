@@ -195,3 +195,31 @@
 **vercel.json** — already correct from Session 1; no changes needed.
 
 **All 9 steps complete. Ready to deploy to Vercel.**
+
+---
+
+## Session 9 — 2026-06-16
+
+### New Feature: Pomodoro Study Timer
+
+**app.js — `PomodoroTimer` IIFE module:**
+- 25-min focus / 5-min break Pomodoro cycle per assignment
+- `open(assignment)`: opens a bottom-sheet timer for the given quest card; confirms before switching assignments mid-session
+- `mount()`: injects a slide-up sheet with animated SVG ring countdown, phase label (FOCUS / BREAK), session count, and controls (play/pause ▶⏸, skip ⏭, reset ↺, close)
+- `onWorkComplete()`: awards +25 ⚡ coins + 10 XP per completed session, stores count in `cq_pomodoro_sessions`, appends to `cq_coin_history` as `Study: <name>`, triggers coin burst, syncs leaderboard, vibrates device, auto-starts break
+- `onBreakComplete()`: returns to work phase, waits for user to restart
+- Mini floating widget (`#pom-mini`): appears above the tab bar while a timer is open; tap ⏱ to reopen the sheet
+- Global click delegation in `boot()` on `document.body` for `.q-timer-btn`
+
+**app.js — `questCardHtml()`:**
+- Added ⏱ timer button (`.q-timer-btn`) to every non-done quest card
+
+**style.css:**
+- `.q-timer-btn` — circular button, gold on hover
+- `.pom-overlay` — fixed backdrop with blur, opacity/pointer-events transition
+- `.pom-sheet` — bottom-sheet slide-up with spring easing
+- SVG ring: `stroke-dashoffset` animates at `0.95s linear`; color transitions green↔gold on phase switch
+- `.pom-complete-badge` — green pill badge shown 2.4s on session completion
+- `.pom-mini` — floating pill above tab bar with `@keyframes mini-rise` entrance
+
+**New localStorage key:** `cq_pomodoro_sessions` (JSON object, keyed by assignment id)

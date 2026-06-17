@@ -296,6 +296,7 @@ function questCardHtml(a) {
         </div>
       </div>
       <div class="q-right">
+        ${!done ? `<button class="q-timer-btn" data-id="${escapeHtml(a.id)}" data-name="${escapeHtml(a.name)}" aria-label="Study timer">⏱</button>` : ''}
         <button class="q-check" data-id="${escapeHtml(a.id)}" aria-label="Complete">
           ${done ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>' : ''}
         </button>
@@ -933,6 +934,200 @@ const Leaderboard = (() => {
   return { sync, renderView };
 })();
 
+// ── Pomodoro Study Timer ──────────────────────────────
+const PomodoroTimer = (() => {
+  const WORK_SECS          = 25 * 60;
+  const BREAK_SECS         = 5  * 60;
+  const COINS_PER_SESSION  = 25;
+  const XP_PER_SESSION     = 10;
+  const RING_R             = 54;
+  const RING_CIRC          = Math.round(2 * Math.PI * RING_R);
+
+  let _interval   = null;
+  let _timeLeft   = WORK_SECS;
+  let _phase      = 'work';
+  let _running    = false;
+  let _assignment = null;
+
+  function getSessions(id) {
+    return (JSON.parse(Store.get('cq_pomodoro_sessions') || '{}')[id] || 0);
+  }
+  function addSession(id) {
+    const all = JSON.parse(Store.get('cq_pomodoro_sessions') || '{}');
+    all[id] = (all[id] || 0) + 1;
+    Store.set('cq_pomodoro_sessions', JSON.stringify(all));
+    return all[id];
+  }
+
+  function fmt(secs) {
+    return `${String(Math.floor(secs / 60)).padStart(2,'0')}:${String(secs % 60).padStart(2,'0')}`;
+  }
+  function totalSecs()  { return _phase === 'work' ? WORK_SECS : BREAK_SECS; }
+  function ringOffset() { return Math.round(RING_CIRC * (1 - _timeLeft / totalSecs())); }
+
+  function render() {
+    const overlay = document.getElementById('pomodoro-overlay');
+    if (!overlay) return;
+    const isWork    = _phase === 'work';
+    const color     = isWork ? 'var(--green)' : 'var(--gold)';
+    const phaseTxt  = isWork ? 'FOCUS SESSION' : 'BREAK TIME';
+    const doneCnt   = _assignment ? getSessions(_assignment.id) : 0;
+    overlay.querySelector('.pom-phase').textContent        = phaseTxt;
+    overlay.querySelector('.pom-phase').style.color        = color;
+    overlay.querySelector('.pom-time').textContent         = fmt(_timeLeft);
+    overlay.querySelector('.pom-ring-fill').setAttribute('stroke-dashoffset', ringOffset());
+    overlay.querySelector('.pom-ring-fill').style.stroke   = color;
+    overlay.querySelector('.pom-sessions').textContent     =
+      `${doneCnt} session${doneCnt !== 1 ? 's' : ''} completed`;
+    overlay.querySelector('.pom-playpause').textContent    = _running ? '⏸' : '▶';
+    updateMini();
+  }
+
+  function tick() {
+    _timeLeft--;
+    render();
+    if (_timeLeft > 0) return;
+    clearInterval(_interval); _interval = null; _running = false;
+    if (_phase === 'work') onWorkComplete();
+    else onBreakComplete();
+  }
+
+  function onWorkComplete() {
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    addSession(_assignment.id);
+    Store.set('cq_coins', String(GameState.getCoins() + COINS_PER_SESSION));
+    Store.set('cq_xp',    String(GameState.getXP()    + XP_PER_SESSION));
+    const hist = JSON.parse(Store.get('cq_coin_history') || '[]');
+    hist.unshift({ id: `pom-${_assignment.id}`, name: `Study: ${_assignment.name}`, coinsEarned: COINS_PER_SESSION, wasLate: false, ts: Date.now() });
+    Store.set('cq_coin_history', JSON.stringify(hist.slice(0, 10)));
+    showCoinBurst(COINS_PER_SESSION);
+    Leaderboard.sync();
+    const badge = document.querySelector('.pom-complete-badge');
+    if (badge) { badge.textContent = `+${COINS_PER_SESSION} ⚡ earned!`; badge.hidden = false; setTimeout(() => { badge.hidden = true; }, 2400); }
+    _phase = 'break'; _timeLeft = BREAK_SECS;
+    render();
+    _running = true; _interval = setInterval(tick, 1000);
+    render();
+  }
+
+  function onBreakComplete() {
+    if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
+    _phase = 'work'; _timeLeft = WORK_SECS;
+    render();
+  }
+
+  function open(assignment) {
+    if (_assignment && _assignment.id !== assignment.id && _running) {
+      if (!confirm(`Stop session for "${_assignment.name}" and start a new one?`)) return;
+      clearInterval(_interval); _interval = null; _running = false;
+    }
+    _assignment = assignment;
+    if (!document.getElementById('pomodoro-overlay')) {
+      _timeLeft = WORK_SECS; _phase = 'work';
+      mount();
+    }
+    document.getElementById('pomodoro-overlay').hidden = false;
+    render();
+  }
+
+  function mount() {
+    const el = document.createElement('div');
+    el.id = 'pomodoro-overlay';
+    el.className = 'pom-overlay';
+    el.innerHTML = `
+      <div class="pom-sheet">
+        <div class="pom-handle-bar"></div>
+        <div class="pom-header">
+          <span class="pom-title mono">Study Timer</span>
+          <button class="pom-close icon-pill" aria-label="Close">✕</button>
+        </div>
+        <div class="pom-name">${escapeHtml(_assignment.name)}</div>
+        <div class="pom-phase mono">FOCUS SESSION</div>
+        <div class="pom-ring-wrap">
+          <svg class="pom-ring" viewBox="0 0 120 120" width="160" height="160" aria-hidden="true">
+            <circle class="pom-ring-track" cx="60" cy="60" r="${RING_R}"/>
+            <circle class="pom-ring-fill"  cx="60" cy="60" r="${RING_R}"
+              stroke-dasharray="${RING_CIRC}" stroke-dashoffset="0"
+              transform="rotate(-90 60 60)"/>
+          </svg>
+          <div class="pom-time-wrap">
+            <div class="pom-time display">25:00</div>
+          </div>
+        </div>
+        <div class="pom-sessions mono">0 sessions completed</div>
+        <div class="pom-complete-badge mono" hidden></div>
+        <div class="pom-controls">
+          <button class="pom-skip icon-pill" aria-label="Skip phase" title="Skip">⏭</button>
+          <button class="pom-playpause btn-primary" aria-label="Start">▶</button>
+          <button class="pom-reset icon-pill" aria-label="Reset" title="Reset">↺</button>
+        </div>
+      </div>`;
+    el.querySelector('.pom-playpause').addEventListener('click', togglePlay);
+    el.querySelector('.pom-skip').addEventListener('click', skip);
+    el.querySelector('.pom-reset').addEventListener('click', reset);
+    el.querySelector('.pom-close').addEventListener('click', close);
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('pom-overlay--open'));
+    showMini();
+  }
+
+  function togglePlay() {
+    if (_running) { clearInterval(_interval); _interval = null; _running = false; }
+    else          { _running = true; _interval = setInterval(tick, 1000); }
+    render();
+  }
+
+  function skip() {
+    clearInterval(_interval); _interval = null; _running = false;
+    _phase    = _phase === 'work' ? 'break' : 'work';
+    _timeLeft = totalSecs();
+    render();
+  }
+
+  function reset() {
+    clearInterval(_interval); _interval = null; _running = false;
+    _timeLeft = totalSecs();
+    render();
+  }
+
+  function close() {
+    clearInterval(_interval); _interval = null; _running = false;
+    removeMini();
+    const el = document.getElementById('pomodoro-overlay');
+    if (!el) return;
+    el.classList.remove('pom-overlay--open');
+    setTimeout(() => el.remove(), 300);
+  }
+
+  function showMini() {
+    removeMini();
+    const mini = document.createElement('div');
+    mini.id = 'pom-mini';
+    mini.className = 'pom-mini';
+    mini.innerHTML = `
+      <span class="pom-mini-phase mono">FOCUS</span>
+      <span class="pom-mini-time mono">25:00</span>
+      <button class="pom-mini-expand" aria-label="Open timer">⏱</button>`;
+    mini.querySelector('.pom-mini-expand').addEventListener('click', () => {
+      const overlay = document.getElementById('pomodoro-overlay');
+      if (overlay) { overlay.hidden = false; overlay.classList.add('pom-overlay--open'); }
+      else if (_assignment) { mount(); render(); }
+    });
+    document.body.appendChild(mini);
+  }
+
+  function removeMini() { document.getElementById('pom-mini')?.remove(); }
+
+  function updateMini() {
+    const mini = document.getElementById('pom-mini');
+    if (!mini) return;
+    mini.querySelector('.pom-mini-time').textContent  = fmt(_timeLeft);
+    mini.querySelector('.pom-mini-phase').textContent = _phase === 'work' ? 'FOCUS' : 'BREAK';
+  }
+
+  return { open };
+})();
+
 // ── View renderers ────────────────────────────────────
 const Views = {
   renderQuests() {
@@ -1047,6 +1242,10 @@ function showShell() { document.getElementById('shell').hidden = false; }
 function boot() {
   SetupModal.init();
   Router.init();
+  document.body.addEventListener('click', e => {
+    const btn = e.target.closest('.q-timer-btn');
+    if (btn) { e.stopPropagation(); PomodoroTimer.open({ id: btn.dataset.id, name: btn.dataset.name }); }
+  });
   if (!Store.isSetup()) {
     SetupModal.show();
   } else {
